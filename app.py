@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from src.prompt import *
 import os
 import time
+st.set_page_config(layout="wide")
 
 ########################################################
 ########################################################
@@ -100,7 +101,7 @@ placeholder.empty()
 # Set the title
 st.title("Medical Bot")
 
-# Initialize Chat History
+previous = '''# Initialize Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -124,3 +125,67 @@ if prompt:
         st.markdown(response)
     # Add assistant response to chat history
     st.session_state.messages.append({'role':'assistant', 'content':response, 'avatar':'👨‍⚕️'})
+
+
+st.divider()
+st.header("Upload an Image for Analysis")
+
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    st.image(uploaded_file, caption='Uploaded Image.', use_column_width=True)
+    
+    with st.spinner('Analyzing image...'):
+        time.sleep(2)  # simulate processing
+        prediction = "Diagnosis: Healthy skin"  # Replace this with your real model
+
+    st.success(prediction)
+'''
+
+
+
+left, middle, right = st.columns([10, 0.5, 10])
+
+with left:
+    st.header("💬 Chatbot Section")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Step 1: Handle prompt input **first**
+    prompt = st.chat_input("Please enter your message")
+
+    if prompt:
+        # Add user's new message immediately
+        st.session_state.messages.append({'role': 'user', 'content': prompt, 'avatar': '👩'})
+
+        # Get assistant response
+        response = rag_chain.invoke({"input": prompt})['answer']
+        st.session_state.messages.append({'role': 'assistant', 'content': response, 'avatar': '👨‍⚕️'})
+
+    # Step 2: Now render the FULL chat history (after adding new ones)
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message['role'], avatar=message['avatar']):
+                st.markdown(message['content'])
+
+
+with middle:
+    st.markdown(
+        """<div style="height: 100%; border-left: 1px solid lightgray;"></div>""",
+        unsafe_allow_html=True
+    )
+
+with right:
+    st.header("📷 Image Upload Section")
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    
+    if uploaded_file is not None:
+        st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+        
+        with st.spinner('Analyzing image...'):
+            time.sleep(2)
+            prediction = "Diagnosis: Healthy skin"
+
+        st.success(prediction)

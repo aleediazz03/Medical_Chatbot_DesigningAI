@@ -8,4 +8,8 @@ langchain_pinecone
 langchain_community
 langchain_openai
 langchain_experimental
+tensorflow
+keras
+matplotlib
+
 -e .
