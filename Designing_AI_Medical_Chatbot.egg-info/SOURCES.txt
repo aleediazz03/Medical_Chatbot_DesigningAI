@@ -1,4 +1,4 @@
-LICENSE
+LICENCE
 README.md
 setup.py
 Designing_AI_Medical_Chatbot.egg-info/PKG-INFO
