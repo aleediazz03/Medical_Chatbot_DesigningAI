@@ -1,12 +1,14 @@
 import streamlit as st
-from src.helper import download_hugging_face_embeddings
+from src.helper import download_hugging_face_embeddings, predict_xray
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAI
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
-from src.prompt import *
+from src.prompt import *              
+from PIL import Image       
+import torch, torch.nn as nn, torchxrayvision as xrv
 import os
 import time
 st.set_page_config(layout="wide")
@@ -85,6 +87,33 @@ question_answer_chain = create_stuff_documents_chain(llm, prompt_to_llm)
 rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
 
+################ LOAD COMPUTER VISION MODEL
+@st.cache_resource
+def load_my_model():
+    # 1) Device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # 2) Rebuild CheXNet→binary
+    model = xrv.models.DenseNet(weights='densenet121-res224-all')
+    orig_head = model.classifier
+    in_feat = orig_head.in_features if hasattr(orig_head,'in_features') else orig_head[0].in_features
+    model.classifier = nn.Linear(in_feat, 1)
+
+    def forward_no_opnorm(x):
+        feats = model.features(x)
+        return model.classifier(feats.mean((2,3)))
+    model.forward = forward_no_opnorm
+
+    model.to(device)
+
+    # 3) Load weights
+    checkpoint = torch.load('final_chexnet_finetuned.pth', map_location=device)
+    model.load_state_dict(checkpoint)
+
+    # 4) Eval mode
+    model.eval()
+    return model
+model = load_my_model()
 
 
 ########################################################
@@ -99,55 +128,12 @@ placeholder.empty()
 ########################################################
 
 # Set the title
-st.title("Medical Bot")
-
-previous = '''# Initialize Chat History
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message['role'], avatar=message['avatar']):
-        st.markdown(message['content'])
-
-# React to user input
-prompt = st.chat_input("Please enter your message")
-if prompt: 
-    # Display user message in chat message container
-    with st.chat_message(name='user', avatar='👩'):
-        st.markdown(prompt)
-    # Add user message to chat history
-    st.session_state.messages.append({'role':'user', 'content':prompt, 'avatar':'👩'})
-
-    response = rag_chain.invoke({"input": prompt})['answer']
-    # Display assistant response in chat container
-    with st.chat_message(name='assistant', avatar='👨‍⚕️'):
-        st.markdown(response)
-    # Add assistant response to chat history
-    st.session_state.messages.append({'role':'assistant', 'content':response, 'avatar':'👨‍⚕️'})
-
-
-st.divider()
-st.header("Upload an Image for Analysis")
-
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
-    st.image(uploaded_file, caption='Uploaded Image.', use_column_width=True)
-    
-    with st.spinner('Analyzing image...'):
-        time.sleep(2)  # simulate processing
-        prediction = "Diagnosis: Healthy skin"  # Replace this with your real model
-
-    st.success(prediction)
-'''
-
-
+st.title("Medical Bot 🩺🧪🧬")
 
 left, middle, right = st.columns([10, 0.5, 10])
 
 with left:
-    st.header("💬 Chatbot Section")
+    st.header("💬 Chatbot")
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -178,14 +164,16 @@ with middle:
     )
 
 with right:
-    st.header("📷 Image Upload Section")
+    st.header("📷 IMAGE PNEUMONIA DIAGNOSIS")
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
     
     if uploaded_file is not None:
-        st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+        img = Image.open(uploaded_file).convert('L')
+        st.image(uploaded_file, caption="Uploaded Image", use_container_width=True) # use_column_width
         
         with st.spinner('Analyzing image...'):
             time.sleep(2)
-            prediction = "Diagnosis: Healthy skin"
+            prediction, confidence = predict_xray(img, model)
 
-        st.success(prediction)
+
+        st.success(f'{prediction} with confidence {round(confidence,2)}%')

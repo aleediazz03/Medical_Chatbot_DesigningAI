@@ -1,6 +1,11 @@
 from langchain.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceBgeEmbeddings
+import torch                
+from PIL import Image       
+import matplotlib.pyplot as plt  
+from torchvision import transforms
+
 
 
 
@@ -33,3 +38,30 @@ https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
 def download_hugging_face_embeddings():
     embeddings=HuggingFaceBgeEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
     return embeddings
+
+
+'''
+FUNCTION TO MAKE PREDICTION FROM IMAGE
+'''
+def predict_xray(img, model, threshold=0.5):
+
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),  # or whatever input size your model expects
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])  # adjust normalization if needed
+    ])
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    img_tensor = transform(img).unsqueeze(0).to(device)
+    with torch.no_grad():
+        output = model(img_tensor)
+        score = torch.sigmoid(output[0]).item()
+        if score > threshold:
+            confidence = (score)*100
+            prediction = "PMEUMONIA"
+        else:
+            confidence = (1-score)*100
+            prediction = "NORMAL"
+    
+    return prediction, confidence

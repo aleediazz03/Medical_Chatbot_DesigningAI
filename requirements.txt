@@ -8,8 +8,10 @@ langchain_pinecone
 langchain_community
 langchain_openai
 langchain_experimental
-tensorflow
-keras
+torch
+torchvision
 matplotlib
+pillow
+torchxrayvision
 
 -e .
